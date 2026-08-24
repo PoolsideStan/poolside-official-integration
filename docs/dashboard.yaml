@@ -1,0 +1,496 @@
+# Poolside for Home Assistant — reference dashboard
+#
+# Settings → Dashboards → Add dashboard → New dashboard from scratch,
+# then ⋮ → Raw configuration editor → paste this in place of the default.
+#
+# Built-in cards and features only — no HACS front-end dependencies.
+# Verified against Home Assistant 2026.8 and Attendant 2.7.
+#
+# ===========================================================================
+# ENTITY IDS TO SWAP
+#
+# Poolside entities are named `<device> <entity>`, and the entity_id is that
+# pair slugified. The device is the body of water ("Pool", "Spa", "Sauna",
+# "Cold Plunge", ...), so IDs come out like `sensor.pool_temperature`.
+#
+# Fixed — same on every install, only the body-of-water prefix changes:
+#   sensor.pool_temperature              water temperature
+#   sensor.pool_water_state              Filtering / Heating / Cooling / Off ...
+#   sensor.pool_ph                       ┐
+#   sensor.pool_orp                      │ chemistry: each of these exists
+#   sensor.pool_free_chlorine            │ ONLY if that probe is installed
+#   sensor.pool_total_chlorine           │ and reporting. Delete the rest.
+#   sensor.pool_salt_level               ┘
+#
+# Derived from your controller's control names, so these WILL differ:
+#   climate.pool_temp                    TEMPERATURE control (commonly "Temp")
+#   select.pool_temp_heating_mode        Fuel / Heat pump / Solar / Smart
+#   select.pool_temp_cooling_mode        Chiller / Heat pump / Smart
+#   fan.pool_filter                      variable-speed pump or feature
+#   switch.spa_blower                    single-speed control
+#   light.pool_pool_light                light; colors + shows = effect list
+#
+# Site-level, named after the site, not a body of water:
+#   sensor.my_site_controller_mode        normal / installer / fault / factory
+#
+# To dump your own list: Developer tools → Template, and render
+#   {{ integration_entities('poolside') | join('\n') }}
+#
+# ===========================================================================
+
+views:
+  # =========================================================================
+  - title: Pool
+    path: pool
+    icon: mdi:pool
+    type: sections
+    max_columns: 3
+    sections:
+      # ---------------------------------------------------------------- status
+      - type: grid
+        cards:
+          - type: heading
+            heading: Pool
+            heading_style: title
+            icon: mdi:pool
+            badges:
+              - type: entity
+                entity: sensor.pool_water_state
+              - type: entity
+                entity: sensor.pool_temperature
+
+          # Every control goes unavailable while the controller is out of
+          # NORMAL mode, and the mode can only be changed on the controller
+          # itself. Saying so beats a dashboard of greyed-out tiles.
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.my_site_controller_mode
+                state_not: normal
+            card:
+              type: markdown
+              content: >-
+                ### ⚠️ Controller is in
+                {{ states('sensor.my_site_controller_mode') }} mode
+
+                Poolside controls stay unavailable until it is returned to
+                Normal mode on the controller itself.
+
+          - type: tile
+            entity: sensor.pool_temperature
+            name: Water
+            icon: mdi:pool-thermometer
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 24
+
+          - type: tile
+            entity: sensor.pool_water_state
+            name: State
+
+      # ------------------------------------------------------------------ heat
+      - type: grid
+        cards:
+          - type: heading
+            heading: Heat
+            icon: mdi:fire
+
+          # `hvac_modes` is deliberately left unset: a body of water offers
+          # only what its installed equipment supports (a chiller-only site
+          # reports ['off', 'cool']), and the feature shows exactly those.
+          - type: thermostat
+            entity: climate.pool_temp
+            features:
+              - type: climate-hvac-modes
+
+          # Which heat/cool source satisfies the setpoint. Each select only
+          # exists if the body of water has that equipment — delete the one
+          # your site doesn't report.
+          - type: tile
+            entity: select.pool_temp_heating_mode
+            name: Heat source
+            features_position: bottom
+            features:
+              - type: select-options
+
+          - type: tile
+            entity: select.pool_temp_cooling_mode
+            name: Cool source
+            features_position: bottom
+            features:
+              - type: select-options
+
+      # --------------------------------------------------- pumps and features
+      - type: grid
+        cards:
+          - type: heading
+            heading: Pumps & features
+            icon: mdi:pump
+
+          # Variable-speed controls are fans. The slider snaps to the exact
+          # percentages the hardware accepts (percentage_step), so it may
+          # move in coarser jumps than a normal fan.
+          - type: tile
+            entity: fan.pool_filter
+            name: Filter
+            features_position: bottom
+            features:
+              - type: fan-speed
+
+          - type: tile
+            entity: fan.pool_spa_cleaner
+            name: Cleaner
+            features_position: bottom
+            features:
+              - type: fan-speed
+
+          # Single-speed controls, and blowers, are plain switches.
+          - type: tile
+            entity: switch.pool_spa_landscape_mister
+            name: Landscape mister
+
+      # ---------------------------------------------------------------- lights
+      - type: grid
+        cards:
+          - type: heading
+            heading: Lights
+            icon: mdi:lightbulb-on-outline
+
+          # There is no RGB here: colors and multi-color shows are both
+          # opaque named values, exposed together as the light's effect list.
+          #
+          # Home Assistant has no tile feature for effects, so the buttons
+          # below set them directly. Pick names from YOUR light's
+          # effect_list (Developer tools → States) — the catalog comes from
+          # the hardware and differs per fixture. Full list is always
+          # available by tapping the tile for the more-info dialog.
+          #
+          # Poolside lights report SupportsBrightness; the ones on this
+          # site are on/off only (supported_color_modes: ['onoff']), so no
+          # brightness slider is shown. If yours is dimmable, add:
+          #   - type: light-brightness
+          - type: tile
+            entity: light.pool_pool_light
+            name: Pool light
+            icon: mdi:track-light
+
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: button
+                name: Royal Blue
+                icon: mdi:palette
+                show_state: false
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_on
+                  target:
+                    entity_id: light.pool_pool_light
+                  data:
+                    effect: Royal Blue
+              - type: button
+                name: Emerald
+                icon: mdi:palette
+                show_state: false
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_on
+                  target:
+                    entity_id: light.pool_pool_light
+                  data:
+                    effect: Emerald
+              - type: button
+                name: Mardi Gras
+                icon: mdi:party-popper
+                show_state: false
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_on
+                  target:
+                    entity_id: light.pool_pool_light
+                  data:
+                    effect: Mardi Gras
+
+      # ------------------------------------------------------------- chemistry
+      # Chemistry probes are optional equipment: each sensor is created only
+      # once the controller actually reports that field. Delete any your
+      # site doesn't have — most sites have some subset of these.
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Chemistry
+            icon: mdi:beaker-outline
+
+          # Probes report full precision, so pH renders as e.g. 7.572999. The
+          # gauge card has no rounding option — set it on the entity instead:
+          # Settings → Devices & services → Entities → the sensor → cog →
+          # Display precision. 2 decimals suits pH, 0 suits ORP and salt.
+
+          - type: gauge
+            entity: sensor.pool_ph
+            name: pH
+            min: 6.8
+            max: 8.2
+            needle: true
+            segments:
+              - from: 6.8
+                color: "#db4437"
+              - from: 7.2
+                color: "#43a047"
+              - from: 7.8
+                color: "#db4437"
+
+          - type: gauge
+            entity: sensor.pool_orp
+            name: ORP
+            min: 400
+            max: 900
+            needle: true
+            segments:
+              - from: 400
+                color: "#db4437"
+              - from: 650
+                color: "#43a047"
+              - from: 800
+                color: "#f4b400"
+
+          - type: gauge
+            entity: sensor.pool_total_chlorine
+            name: Total chlorine
+            min: 0
+            max: 6
+            needle: true
+            segments:
+              - from: 0
+                color: "#db4437"
+              - from: 1
+                color: "#43a047"
+              - from: 3
+                color: "#f4b400"
+
+          - type: gauge
+            entity: sensor.pool_salt_level
+            name: Salt
+            min: 2000
+            max: 5000
+            needle: true
+            segments:
+              - from: 2000
+                color: "#db4437"
+              - from: 2700
+                color: "#43a047"
+              - from: 4000
+                color: "#f4b400"
+
+      # ----------------------------------------------------------------- trend
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Last 24 hours
+            icon: mdi:chart-line
+
+          - type: history-graph
+            hours_to_show: 24
+            entities:
+              - entity: sensor.pool_temperature
+                name: Water
+              - entity: sensor.pool_water_state
+                name: State
+              - entity: fan.pool_filter
+                name: Filter
+
+  # =========================================================================
+  # One view per body of water scales better than one crowded overview —
+  # a site can expose Pool, Spa, Sauna, Cold Plunge and more.
+  - title: Spa
+    path: spa
+    icon: mdi:hot-tub
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Spa
+            heading_style: title
+            icon: mdi:hot-tub
+            badges:
+              - type: entity
+                entity: sensor.spa_water_state
+              - type: entity
+                entity: sensor.spa_temperature
+
+          # Reads `unknown` rather than a stale number while the body of
+          # water isn't circulating — there is no probe value to report.
+          - type: tile
+            entity: sensor.spa_temperature
+            name: Water
+            icon: mdi:pool-thermometer
+
+          - type: tile
+            entity: sensor.spa_water_state
+            name: State
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Heat
+            icon: mdi:fire
+
+          - type: thermostat
+            entity: climate.spa_temp
+            features:
+              - type: climate-hvac-modes
+
+          - type: tile
+            entity: select.spa_temp_heating_mode
+            name: Heat source
+            features_position: bottom
+            features:
+              - type: select-options
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Features
+            icon: mdi:fountain
+
+          - type: tile
+            entity: fan.spa_spa_jet
+            name: Jets
+            features_position: bottom
+            features:
+              - type: fan-speed
+
+          - type: tile
+            entity: switch.spa_blower
+            name: Blower
+
+          - type: tile
+            entity: light.spa_spa_light
+            name: Spa light
+            icon: mdi:track-light
+
+  # =========================================================================
+  # Physical equipment telemetry. These entities exist only while
+  # "Expose pool devices" is enabled (Settings → Devices & services →
+  # Poolside → Configure).
+  #
+  # Which fields appear is entirely up to what each piece of equipment
+  # reports — a variable-speed pump publishes power/RPM/status, a relay-driven
+  # device may publish nothing but its power state. Treat this view as a
+  # pattern to copy, not a list to expect.
+  - title: Equipment
+    path: equipment
+    icon: mdi:cog-outline
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Controller
+            heading_style: title
+            icon: mdi:cog-outline
+
+          - type: tile
+            entity: sensor.my_site_controller_mode
+            name: Mode
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Pump
+            icon: mdi:pump
+
+          - type: tile
+            entity: sensor.pump_power_state
+            name: Power state
+          - type: tile
+            entity: sensor.pump_power
+            name: Power draw
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 24
+          - type: tile
+            entity: sensor.pump_rpm
+            name: Speed
+          - type: tile
+            entity: sensor.pump_status
+            name: Status
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Heat equipment
+            icon: mdi:fire
+
+          - type: tile
+            entity: sensor.heater_power_state
+            name: Heater
+          - type: tile
+            entity: sensor.chiller_power_state
+            name: Chiller
+          # A heater that has just shut down circulates water to dissipate
+          # residual heat; this is when it will be free to fire again. The
+          # sensor is null while no cooldown is running, so the tile is
+          # conditional rather than permanently reading "Unknown".
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.pump_heater_cooldown_until
+                state_not: unknown
+              - condition: state
+                entity: sensor.pump_heater_cooldown_until
+                state_not: unavailable
+            card:
+              type: tile
+              entity: sensor.pump_heater_cooldown_until
+              name: Heater cooldown until
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Valves
+            icon: mdi:valve
+
+          # Idle / Moving / Waiting / Calibrating / Error / Failed /
+          # Offline / Overload — the icon tracks the state.
+          - type: tile
+            entity: sensor.pool_spa_suction_actuator_state
+            name: Pool/spa suction
+          - type: tile
+            entity: sensor.pool_spa_suction_actuator_position
+            name: Position
+          - type: tile
+            entity: sensor.chiller_return_valve_state
+            name: Chiller return
+
+      # Diagnostic entities are hidden from auto-generated dashboards but can
+      # be placed explicitly. `disabled reason` is the one to reach for when a
+      # control is unavailable and you want to know why: Winterized,
+      # Freeze protection, or Pool cover closed.
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Why is a control unavailable?
+            icon: mdi:help-circle-outline
+
+          - type: entities
+            entities:
+              - entity: sensor.pool_temp_disabled_reason
+                name: Pool heat
+              - entity: sensor.pool_filter_disabled_reason
+                name: Pool filter
+              - entity: sensor.pool_pool_light_disabled_reason
+                name: Pool light
+              - entity: sensor.spa_temp_disabled_reason
+                name: Spa heat
+              - entity: sensor.spa_blower_disabled_reason
+                name: Spa blower

@@ -53,6 +53,20 @@ Options (Settings → Devices & Services → Poolside → Configure):
 - **Expose pool devices** — create read-only telemetry sensors for the
   physical equipment (pumps, heaters, actuators, ...) the controller operates.
 
+## Dashboard
+
+Home Assistant builds a dashboard automatically from the devices the
+integration creates, which is enough to control everything. For a hand-built
+starting point, [`docs/dashboard.yaml`](docs/dashboard.yaml) is a reference
+dashboard covering a two-body site: per-body views with heat, pumps, features
+and lights, chemistry gauges, and an equipment view for pool-device telemetry.
+
+Paste it into **Settings → Dashboards → Add dashboard → New dashboard from
+scratch**, then **⋮ → Raw configuration editor**. It uses built-in cards only,
+so no HACS front-end dependencies are needed. The entity IDs in it are
+examples — the file documents which ones are fixed and which are derived from
+your controller's own control names.
+
 ## Relationship to Home Assistant Core
 
 This integration has been submitted for inclusion in Home Assistant Core.
