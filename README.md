@@ -20,7 +20,7 @@ your network via zeroconf and talks to it over an encrypted websocket session
 
 ## Requirements
 
-- Poolside Tech Attendant software **2.7.0 or later**
+- Poolside Tech Attendant software **2.6.6 or later**
 - Administrator access to the controller (to approve the pairing request)
 - The controller must be reachable on your local network
 
