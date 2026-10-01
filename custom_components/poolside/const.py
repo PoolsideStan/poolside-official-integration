@@ -33,8 +33,8 @@ ICON_TRANSLATION_KEYS = {
 SITE_MODE_KEY = "site_mode"
 
 # Body-of-water field describing an ongoing heat-up (or cool-down) toward the
-# set point, including the controller's predicted completion time. Not yet in
-# aiopoolside.const.
+# set point, including the controller's predicted completion time. Not in
+# aiopoolside.const as of 0.1.0; import from there once it is.
 TEMPERATURE_RISE_INFORMATION_FIELD = "TemperatureRiseInformation"
 TEMPERATURE_RISE_TARGET_END_KEY = "TargetEndDateTime"
 TEMPERATURE_RISE_ACTUAL_END_KEY = "ActualEndDateTime"
