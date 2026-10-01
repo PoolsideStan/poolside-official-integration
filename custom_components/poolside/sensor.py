@@ -68,7 +68,14 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import PoolsideConfigEntry
-from .const import DOMAIN, LOGGER, SITE_MODE_KEY
+from .const import (
+    DOMAIN,
+    LOGGER,
+    SITE_MODE_KEY,
+    TEMPERATURE_RISE_ACTUAL_END_KEY,
+    TEMPERATURE_RISE_INFORMATION_FIELD,
+    TEMPERATURE_RISE_TARGET_END_KEY,
+)
 from .entity import (
     PoolsideBaseEntity,
     PoolsideDeviceEntity,
@@ -226,6 +233,27 @@ def _datetime_value(value: Any) -> datetime | None:
     if parsed is not None and parsed.tzinfo is None:
         # Naive timestamps are in the controller's (= HA's) local time.
         parsed = parsed.replace(tzinfo=dt_util.get_default_time_zone())
+    return parsed
+
+
+def _temperature_rise_value(value: Any, key: str) -> datetime | None:
+    """Return a timestamp from a TemperatureRiseInformation document.
+
+    The controller sends unset timestamps as 0001-01-01 placeholders (e.g.
+    TargetEndDateTime while it is still sampling the water temperature),
+    which map to no data, as does a missing or malformed document.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        document = json.loads(value)
+    except ValueError:
+        return None
+    if not isinstance(document, dict):
+        return None
+    parsed = _datetime_value(document.get(key))
+    if parsed is None or parsed.year <= 1:
+        return None
     return parsed
 
 
@@ -544,6 +572,7 @@ async def async_setup_entry(
             PoolsideBodySensor(client, group, body_of_water_uuid, TEMPERATURE_SENSOR)
         )
         entities.append(PoolsideBodyStateSensor(client, group, body_of_water_uuid))
+        entities.append(PoolsideBodyReadyTimeSensor(client, group, body_of_water_uuid))
     entities.extend(
         PoolsideControlDisabledReasonSensor(client, control)
         for control in data.controls
@@ -695,6 +724,45 @@ class PoolsideBodyStateSensor(PoolsideGroupEntity, SensorEntity):
             return BodyOfWaterState(value).value.lower()
         except ValueError:
             return None
+
+
+class PoolsideBodyReadyTimeSensor(PoolsideGroupEntity, SensorEntity):
+    """When a heating body of water is predicted to reach its set point.
+
+    Taken from the controller's TemperatureRiseInformation, the same
+    prediction the vendor app shows as "ready in". Unknown while the
+    controller is still sampling the water, once the set point has been
+    reached, and whenever the body isn't heating toward it.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_translation_key = "estimated_ready_time"
+
+    def __init__(
+        self, client: PoolsideClient, group: PoolsideGroup, body_of_water_uuid: str
+    ) -> None:
+        """Set up the ready-time sensor for a given body of water."""
+        super().__init__(client, group)
+        self._body_of_water_uuid = body_of_water_uuid
+        self._attr_unique_id = (
+            f"{client.controller_uuid}_{body_of_water_uuid}_estimated_ready_time"
+        )
+
+    @override
+    def _status_keys(self) -> set[str]:
+        """Return the body-of-water key the prediction arrives under."""
+        return {self._body_of_water_uuid}
+
+    @property
+    @override
+    def native_value(self) -> datetime | None:
+        """Return the predicted completion time of the current heat-up."""
+        value = self._client.get_status(
+            self._body_of_water_uuid, TEMPERATURE_RISE_INFORMATION_FIELD
+        )
+        if _temperature_rise_value(value, TEMPERATURE_RISE_ACTUAL_END_KEY) is not None:
+            return None
+        return _temperature_rise_value(value, TEMPERATURE_RISE_TARGET_END_KEY)
 
 
 class PoolsideDeviceSensor(PoolsideDeviceEntity, SensorEntity):
