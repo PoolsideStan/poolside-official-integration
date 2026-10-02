@@ -37,4 +37,8 @@ SITE_MODE_KEY = "site_mode"
 # aiopoolside.const as of 0.1.0; import from there once it is.
 TEMPERATURE_RISE_INFORMATION_FIELD = "TemperatureRiseInformation"
 TEMPERATURE_RISE_TARGET_END_KEY = "TargetEndDateTime"
-TEMPERATURE_RISE_ACTUAL_END_KEY = "ActualEndDateTime"
+TEMPERATURE_RISE_STATE_KEY = "TemperatureState"
+TEMPERATURE_RISE_EVENT_TYPE_KEY = "HeatingEventType"
+# The vendor app only shows a "ready in" time for a sampled, normal heat-up.
+TEMPERATURE_RISE_SAMPLED = "SAMPLED"
+TEMPERATURE_RISE_NORMAL = "NORMAL"
