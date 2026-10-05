@@ -31,14 +31,3 @@ ICON_TRANSLATION_KEYS = {
 # unique_id suffix of the site mode sensor - the one entity not keyed to a
 # control or body-of-water UUID from the layout.
 SITE_MODE_KEY = "site_mode"
-
-# Body-of-water field describing an ongoing heat-up (or cool-down) toward the
-# set point, including the controller's predicted completion time. Not in
-# aiopoolside.const as of 0.1.0; import from there once it is.
-TEMPERATURE_RISE_INFORMATION_FIELD = "TemperatureRiseInformation"
-TEMPERATURE_RISE_TARGET_END_KEY = "TargetEndDateTime"
-TEMPERATURE_RISE_STATE_KEY = "TemperatureState"
-TEMPERATURE_RISE_EVENT_TYPE_KEY = "HeatingEventType"
-# The vendor app only shows a "ready in" time for a sampled, normal heat-up.
-TEMPERATURE_RISE_SAMPLED = "SAMPLED"
-TEMPERATURE_RISE_NORMAL = "NORMAL"
