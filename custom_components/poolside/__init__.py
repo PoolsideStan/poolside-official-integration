@@ -132,11 +132,11 @@ def _async_register_devices(
     """Register the controller hub and its pool device sub-devices up front.
 
     Pool devices may carry no entities until their InformationFields state
-    arrives, and via_device needs the hub to already exist, so both are
+    arrives, and they are linked to the hub by its device id, so both are
     created explicitly instead of as a side effect of entity setup.
     """
     device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
+    hub = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, client.controller_uuid)},
         name=site.name,
@@ -147,7 +147,7 @@ def _async_register_devices(
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, device.uuid)},
-            via_device=(DOMAIN, client.controller_uuid),
+            via_device_id=hub.id,
             name=device.name,
             manufacturer="Poolside",
             model=device.device_type,
