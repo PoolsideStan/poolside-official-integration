@@ -8,7 +8,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/PoolsideStan/poolside-official-integration/issues",
   "loggers": ["aiopoolside"],
-  "requirements": ["aiopoolside==0.1.0"],
+  "requirements": ["aiopoolside==0.1.1"],
   "version": "0.1.0",
   "zeroconf": ["_poolside._tcp.local."]
 }

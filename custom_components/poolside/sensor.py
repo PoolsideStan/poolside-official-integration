@@ -34,6 +34,12 @@ from aiopoolside.const import (
     LIGHT_NAME_FIELD,
     POWER_STATE_FIELD,
     SPEED_FIELD,
+    TEMPERATURE_RISE_EVENT_TYPE_KEY,
+    TEMPERATURE_RISE_INFORMATION_FIELD,
+    TEMPERATURE_RISE_NORMAL,
+    TEMPERATURE_RISE_SAMPLED,
+    TEMPERATURE_RISE_STATE_KEY,
+    TEMPERATURE_RISE_TARGET_END_KEY,
     TWINKLE_FIELD,
     TWINKLE_INCREMENTS_FIELD,
     WINTERIZED_FIELD,
@@ -62,9 +68,10 @@ from homeassistant.const import (
     UnitOfTime,
     UnitOfVolumeFlowRate,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 from . import PoolsideConfigEntry
@@ -227,6 +234,49 @@ def _datetime_value(value: Any) -> datetime | None:
         # Naive timestamps are in the controller's (= HA's) local time.
         parsed = parsed.replace(tzinfo=dt_util.get_default_time_zone())
     return parsed
+
+
+def _temperature_rise_document(
+    client: PoolsideClient, body_of_water_uuid: str
+) -> dict[str, Any] | None:
+    """Return a body of water's TemperatureRiseInformation document, if any.
+
+    Like other JSON-in-string fields it arrives encoded inside the string
+    value in status pushes; a native document is accepted too.
+    """
+    value = client.get_status(body_of_water_uuid, TEMPERATURE_RISE_INFORMATION_FIELD)
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            LOGGER.warning(
+                "%s: unparsable %s: %r",
+                body_of_water_uuid,
+                TEMPERATURE_RISE_INFORMATION_FIELD,
+                value,
+            )
+            return None
+    return value if isinstance(value, dict) else None
+
+
+def _predicted_ready_time(document: dict[str, Any] | None) -> datetime | None:
+    """Return a heat-up's predicted completion time, as the vendor app shows it.
+
+    The app only shows one for a sampled, normal heat-up: while the
+    controller is still sampling it already fills in a preliminary estimate,
+    and maintaining temperature or learning aren't heat-ups to wait for. An
+    unset TargetEndDateTime arrives as a 0001-01-01 placeholder.
+    """
+    if (
+        document is None
+        or document.get(TEMPERATURE_RISE_STATE_KEY) != TEMPERATURE_RISE_SAMPLED
+        or document.get(TEMPERATURE_RISE_EVENT_TYPE_KEY) != TEMPERATURE_RISE_NORMAL
+    ):
+        return None
+    target = _datetime_value(document.get(TEMPERATURE_RISE_TARGET_END_KEY))
+    if target is None or target.year <= 1:
+        return None
+    return target
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -567,9 +617,21 @@ async def async_setup_entry(
     added: set[str] = set()
 
     @callback
-    def _async_add_reported_chemistry() -> None:
-        new_entities: list[PoolsideBodySensor] = []
+    def _async_add_reported_body_sensors() -> None:
+        new_entities: list[SensorEntity] = []
         for group, body_of_water_uuid in bodies:
+            # Only bodies with a heater report heat-ups.
+            ready_key = f"{body_of_water_uuid}_estimated_ready_time"
+            if ready_key not in added and (
+                client.get_status(
+                    body_of_water_uuid, TEMPERATURE_RISE_INFORMATION_FIELD
+                )
+                is not None
+            ):
+                added.add(ready_key)
+                new_entities.append(
+                    PoolsideBodyReadyTimeSensor(client, group, body_of_water_uuid)
+                )
             for description in CHEMISTRY_SENSORS:
                 added_key = f"{body_of_water_uuid}_{description.key}"
                 if (
@@ -584,10 +646,12 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
-    _async_add_reported_chemistry()
+    _async_add_reported_body_sensors()
     for _group, body_of_water_uuid in bodies:
         entry.async_on_unload(
-            client.subscribe_status(body_of_water_uuid, _async_add_reported_chemistry)
+            client.subscribe_status(
+                body_of_water_uuid, _async_add_reported_body_sensors
+            )
         )
 
     # Pre-seeded so a descriptor that lists ActualPowerState or Winterized
@@ -695,6 +759,80 @@ class PoolsideBodyStateSensor(PoolsideGroupEntity, SensorEntity):
             return BodyOfWaterState(value).value.lower()
         except ValueError:
             return None
+
+
+class PoolsideBodyReadyTimeSensor(PoolsideGroupEntity, SensorEntity):
+    """When a heating body of water is predicted to reach its set point.
+
+    The controller's prediction from TemperatureRiseInformation, shown when
+    the vendor app shows its "ready in" time. Unknown otherwise, including
+    once the predicted time has passed without a new prediction.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_translation_key = "estimated_ready_time"
+
+    def __init__(
+        self, client: PoolsideClient, group: PoolsideGroup, body_of_water_uuid: str
+    ) -> None:
+        """Set up the ready-time sensor for a given body of water."""
+        super().__init__(client, group)
+        self._body_of_water_uuid = body_of_water_uuid
+        self._attr_unique_id = (
+            f"{client.controller_uuid}_{body_of_water_uuid}_estimated_ready_time"
+        )
+        self._target: datetime | None = None
+        self._cancel_expiry: CALLBACK_TYPE | None = None
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Track the prediction, and clear it once its time has passed."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self._client.subscribe_status(
+                self._body_of_water_uuid, self._async_prediction_updated
+            )
+        )
+        self.async_on_remove(self._async_cancel_expiry)
+        self._async_read_prediction()
+
+    @callback
+    def _async_read_prediction(self) -> None:
+        """Read the current prediction and schedule a refresh when it passes."""
+        self._async_cancel_expiry()
+        self._target = _predicted_ready_time(
+            _temperature_rise_document(self._client, self._body_of_water_uuid)
+        )
+        if self._target is not None and self._target > dt_util.utcnow():
+            self._cancel_expiry = async_track_point_in_utc_time(
+                self.hass, self._async_prediction_expired, self._target
+            )
+
+    @callback
+    def _async_prediction_updated(self) -> None:
+        """Handle a status push for the body of water."""
+        self._async_read_prediction()
+        self.async_write_ha_state()
+
+    @callback
+    def _async_prediction_expired(self, _now: datetime) -> None:
+        """Drop a predicted time that has passed without a new prediction."""
+        self._cancel_expiry = None
+        self.async_write_ha_state()
+
+    @callback
+    def _async_cancel_expiry(self) -> None:
+        if self._cancel_expiry is not None:
+            self._cancel_expiry()
+            self._cancel_expiry = None
+
+    @property
+    @override
+    def native_value(self) -> datetime | None:
+        """Return the predicted completion time while it's still ahead."""
+        if self._target is None or self._target <= dt_util.utcnow():
+            return None
+        return self._target
 
 
 class PoolsideDeviceSensor(PoolsideDeviceEntity, SensorEntity):

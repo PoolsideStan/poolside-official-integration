@@ -48,6 +48,9 @@
       "dissolved_oxygen_saturation": {
         "default": "mdi:gas-cylinder"
       },
+      "estimated_ready_time": {
+        "default": "mdi:clock-check-outline"
+      },
       "free_chlorine": {
         "default": "mdi:beaker"
       },

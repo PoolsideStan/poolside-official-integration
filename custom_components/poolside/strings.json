@@ -107,6 +107,9 @@
       "dissolved_oxygen_saturation": {
         "name": "Dissolved oxygen saturation"
       },
+      "estimated_ready_time": {
+        "name": "Estimated ready time"
+      },
       "free_chlorine": {
         "name": "Free chlorine"
       },
