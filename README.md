@@ -10,13 +10,17 @@ your network via zeroconf and talks to it over an encrypted websocket session
 ## Features
 
 - **climate** — heater/chiller control per body of water
+- **tank tracking (DIY)** — see [TANK_TRACKING.md](TANK_TRACKING.md) for a
+  helpers recipe built on the dosed-since-reset counters
 - **fan** — variable-speed pumps and water features
 - **light** — underwater/landscape lights, including effects and brightness
   where supported
 - **switch** — single-speed pumps and other on/off controls
 - **select** — heating/cooling mode selection
-- **sensor** — water temperature, body-of-water state, estimated ready time
-  while heating (the app's "ready in"), site mode, and optional read-only pool
+- **sensor** — water temperature, body-of-water state, water quality, last
+  chemical dose per dosing system, last-minute energy consumption (electric
+  watts and gas Btu), estimated ready time while heating (the app's "ready
+  in"), heater timed-session end, site mode, and optional read-only pool
   device telemetry
 
 ## Requirements

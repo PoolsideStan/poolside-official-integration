@@ -2,7 +2,7 @@
 
 from base64 import b64decode
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from aiopoolside import (
     PoolsideAuthError,
@@ -44,6 +44,7 @@ PLATFORMS = [
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.BUTTON,
 ]
 
 
@@ -55,6 +56,10 @@ class PoolsideData:
     site: PoolsideSite
     controls: list[PoolsideControl]
     pool_devices: list[PoolsideDevice]
+    # Per-body dosing sensors, by `<body uuid>_<dose key>`: the button
+    # platform's reset buttons pair to the sensor platform's dose sensors
+    # through this (sensors are created first in the PLATFORMS order).
+    dose_handlers: dict = field(default_factory=dict)
 
 
 type PoolsideConfigEntry = ConfigEntry[PoolsideData]
@@ -136,7 +141,7 @@ def _async_register_devices(
     created explicitly instead of as a side effect of entity setup.
     """
     device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
+    hub = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, client.controller_uuid)},
         name=site.name,
@@ -147,7 +152,7 @@ def _async_register_devices(
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, device.uuid)},
-            via_device=(DOMAIN, client.controller_uuid),
+            via_device_id=hub.id,
             name=device.name,
             manufacturer="Poolside",
             model=device.device_type,

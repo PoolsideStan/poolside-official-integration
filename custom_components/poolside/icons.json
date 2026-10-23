@@ -20,6 +20,9 @@
       "actual_power_state": {
         "default": "mdi:power"
       },
+      "acid_dose": {
+        "default": "mdi:test-tube"
+      },
       "actuator_state": {
         "default": "mdi:valve",
         "state": {
@@ -30,6 +33,9 @@
           "offline": "mdi:lan-disconnect",
           "overload": "mdi:alert-circle"
         }
+      },
+      "chlorine_dose": {
+        "default": "mdi:beaker-outline"
       },
       "current_state": {
         "default": "mdi:state-machine"
@@ -54,11 +60,20 @@
       "free_chlorine": {
         "default": "mdi:beaker"
       },
+      "gas_consumption": {
+        "default": "mdi:meter-gas"
+      },
+      "on_until": {
+        "default": "mdi:timer-outline"
+      },
       "orp": {
         "default": "mdi:flash"
       },
       "ph": {
         "default": "mdi:ph"
+      },
+      "salt_chlorinator_dose": {
+        "default": "mdi:shaker-outline"
       },
       "salt_level": {
         "default": "mdi:shaker-outline"
@@ -74,8 +89,24 @@
       "total_chlorine": {
         "default": "mdi:beaker"
       },
+      "water_quality_state": {
+        "default": "mdi:water-check",
+        "state": {
+          "alert": "mdi:water-remove",
+          "low": "mdi:water-opacity"
+        }
+      },
       "winterized": {
         "default": "mdi:snowflake"
+      },
+      "acid_dose_total": {
+        "default": "mdi:flask-plus"
+      },
+      "chlorine_dose_total": {
+        "default": "mdi:bottle-tonic-plus"
+      },
+      "salt_chlorinator_dose_total": {
+        "default": "mdi:flask-plus"
       }
     },
     "switch": {
@@ -84,6 +115,11 @@
       },
       "water_feature": {
         "default": "mdi:fountain"
+      }
+    },
+    "button": {
+      "dose_reset": {
+        "default": "mdi:restart-alert"
       }
     }
   }
