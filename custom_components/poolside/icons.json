@@ -38,6 +38,7 @@
         "default": "mdi:check-circle-outline",
         "state": {
           "freeze_protect": "mdi:snowflake-alert",
+          "other_control": "mdi:pump",
           "pool_cover": "mdi:window-shutter",
           "winterized": "mdi:snowflake"
         }
