@@ -594,8 +594,9 @@ async def async_setup_entry(
             PoolsideBodySensor(client, group, body_of_water_uuid, TEMPERATURE_SENSOR)
         )
         entities.append(PoolsideBodyStateSensor(client, group, body_of_water_uuid))
+    control_uuids = {control.uuid for control in data.controls}
     entities.extend(
-        PoolsideControlDisabledReasonSensor(client, control)
+        PoolsideControlDisabledReasonSensor(client, control, control_uuids)
         for control in data.controls
     )
     # ActualPowerState and Winterized are pushed for every pool device
@@ -980,17 +981,33 @@ class PoolsideControlDisabledReasonSensor(PoolsideEntity, SensorEntity):
     the connection. Site-wide INSTALLER mode is explained by the site mode
     sensor instead, and covers every control at once, so it isn't repeated
     here.
+
+    A reason may also be another control's UUID: that control is running
+    and holds this one off, e.g. the pool filter holding the spa's controls
+    off while they share a pump.
     """
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "disabled_reason"
-    _attr_options = ["none", "winterized", "freeze_protect", "pool_cover"]
+    _attr_options = [
+        "none",
+        "winterized",
+        "freeze_protect",
+        "pool_cover",
+        "other_control",
+    ]
     _use_translated_name = True
 
-    def __init__(self, client: PoolsideClient, control: PoolsideControl) -> None:
+    def __init__(
+        self,
+        client: PoolsideClient,
+        control: PoolsideControl,
+        control_uuids: set[str],
+    ) -> None:
         """Set up the disabled reason sensor for a control."""
         super().__init__(client, control)
+        self._control_uuids = control_uuids
         self._attr_unique_id = (
             f"{client.controller_uuid}_{control.uuid}_disabled_reason"
         )
@@ -1011,8 +1028,10 @@ class PoolsideControlDisabledReasonSensor(PoolsideEntity, SensorEntity):
             return "winterized"
         if FREEZE_PROTECT_REASON in reasons:
             return "freeze_protect"
-        if reasons:
+        if any(reason not in self._control_uuids for reason in reasons):
             return "pool_cover"
+        if reasons:
+            return "other_control"
         return "none"
 
 

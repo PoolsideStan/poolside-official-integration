@@ -97,6 +97,7 @@
         "state": {
           "freeze_protect": "Freeze protection",
           "none": "None",
+          "other_control": "Held off by another control",
           "pool_cover": "Pool cover closed",
           "winterized": "Winterized"
         }
