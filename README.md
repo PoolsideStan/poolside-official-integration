@@ -17,7 +17,8 @@ your network via zeroconf and talks to it over an encrypted websocket session
 - **select** — heating/cooling mode selection
 - **sensor** — water temperature, body-of-water state, estimated ready time
   while heating (the app's "ready in"), site mode, and optional read-only pool
-  device telemetry
+  device telemetry, including each thermistor's temperature (such as the air
+  temperature)
 
 ## Requirements
 

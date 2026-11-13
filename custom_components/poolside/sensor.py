@@ -504,6 +504,18 @@ ACTUATOR_FALLBACK_FIELDS: list[dict[str, Any]] = [
     },
 ]
 
+# DeviceType (casing varies by firmware) of thermistors, which publish no
+# InformationFields document but push their reading as Temperature.
+THERMISTOR_DEVICE_TYPE = "thermistor"
+THERMISTOR_TEMPERATURE_FIELD = "Temperature"
+THERMISTOR_DEVICE_FIELDS: list[dict[str, Any]] = [
+    {
+        FIELD_NAME_KEY: THERMISTOR_TEMPERATURE_FIELD,
+        FIELD_DISPLAY_NAME_KEY: "Temperature",
+        FIELD_PROCESSING_LOGIC_KEY: "TEMP_F",
+    },
+]
+
 
 def _device_field_description(field: dict[str, Any]) -> PoolsideFieldSensorDescription:
     """Build the sensor description for one InformationFields entry."""
@@ -553,7 +565,8 @@ def _device_fields(
     Light devices never publish InformationFields, so their fixed vendor
     screen layout is used instead. Actuators always carry their state and
     position fields, plus their published InformationFields document or the
-    fixed fallback list when there is none. Every other device type is
+    fixed fallback list when there is none. Thermistors get their temperature
+    once it is reported, plus any published document. Every other device type is
     described by its InformationFields document alone.
     """
     if device.is_light:
@@ -562,6 +575,11 @@ def _device_fields(
         return ACTUATOR_DEVICE_FIELDS + (
             _information_fields(client, device) or ACTUATOR_FALLBACK_FIELDS
         )
+    if (
+        device.device_type.lower() == THERMISTOR_DEVICE_TYPE
+        and client.get_status(device.uuid, THERMISTOR_TEMPERATURE_FIELD) is not None
+    ):
+        return THERMISTOR_DEVICE_FIELDS + _information_fields(client, device)
     return _information_fields(client, device)
 
 
